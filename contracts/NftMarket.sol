@@ -35,6 +35,7 @@ error NftMarket__NotListingItem();
 error NftMarket__NoBalance();
 error NftMarket__withdrawCallfailure();
 error NftMarket__PriceZero();
+error NftMarket__IsApproved();
 
 contract NftMarket is Ownable {
     struct nftOwner {
@@ -73,6 +74,12 @@ contract NftMarket is Ownable {
     modifier isNftOwner(address nftAddress, uint256 tokenId) {
         address owner = IERC721(nftAddress).ownerOf(tokenId);
         if (owner != msg.sender) {
+            // 检查nft是否已经被转移，如果已经被转移，可以删除nft的信息。
+            // if (owner != nftListings[nftAddress][tokenId].owner) {
+            //     delete nftListings[nftAddress][tokenId];
+            //     emit cencelItemEvent(msg.sender, nftAddress, tokenId);
+            //     return;
+            // }
             revert NftMarket__NotNftOwner();
         }
         _;
@@ -152,4 +159,22 @@ contract NftMarket is Ownable {
         uint256 balance = address(this).balance;
         payable(msg.sender).transfer(balance);
     }
+
+    // 清除nftListings中已不被授权的nft
+    function clearNotApprovedNft(
+        address nftAddress,
+        uint256 tokenId
+    ) public isListed(nftAddress, tokenId) onlyOwner {
+        IERC721 nft = IERC721(nftAddress);
+        if (nft.getApproved(tokenId) == address(this)) {
+            revert NftMarket__IsApproved();
+        }
+        address owner = nftListings[nftAddress][tokenId].owner;
+        delete nftListings[nftAddress][tokenId];
+        emit cencelItemEvent(owner, nftAddress, tokenId);
+    }
+
+    receive() external payable {}
+
+    fallback() external payable {}
 }

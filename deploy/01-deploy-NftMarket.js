@@ -6,7 +6,7 @@ const {
 const { verify } = require("../utils/verify");
 
 module.exports = async ({ getNamedAccounts, deployments }) => {
-    const { deploy } = deployments;
+    const { deploy, log } = deployments;
     const { deployer } = await getNamedAccounts();
 
     const nftMarket = await deploy("NftMarket", {
@@ -19,6 +19,15 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
         await verify(nftMarket.address, [
             networkConfig[network.name].ethUsdPriceFeed,
         ]);
+    }
+
+    // 验证
+    if (
+        !developmentChains.includes(network.name) &&
+        process.env.ETHERSCAN_API_KEY
+    ) {
+        log("Verifying...");
+        await verify(nftMarket.address, []);
     }
 };
 module.exports.tags = ["all", "NftMarket", "main"];

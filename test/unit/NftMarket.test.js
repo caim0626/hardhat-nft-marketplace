@@ -1,7 +1,7 @@
 // 对nftMarket.sol的测试
 const { assert, expect } = require("chai");
-const { BigNumber } = require("ethers");
 const { deployments, ethers, getNamedAccounts } = require("hardhat");
+// const { it } = require("node:test");
 const { developmentChains } = require("../../helper-hardhat-config");
 
 !developmentChains.includes(network.name)
@@ -14,12 +14,13 @@ const { developmentChains } = require("../../helper-hardhat-config");
               vrfCoordinatorV2Mock,
               deployer,
               user,
+              signers,
               namedAccounts;
 
-          before(async function () {
+          beforeEach(async function () {
               await deployments.fixture(["all"]);
               namedAccounts = await getNamedAccounts();
-              const signers = await ethers.getSigners();
+              signers = await ethers.getSigners();
               deployer = namedAccounts.deployer;
               //   console.log(namedAccounts);
               //   console.log(signers[0]);
@@ -103,8 +104,29 @@ const { developmentChains } = require("../../helper-hardhat-config");
                       "NftMarket__PriceZero"
                   );
               });
+              it("上架失败，不是nft持有者", async function () {
+                  const nftMarketwithUser2 = nftMarket.connect(signers[2]);
+                  await expect(
+                      nftMarketwithUser2.listItem(
+                          chibiNft.address,
+                          0,
+                          ethers.utils.parseEther("1")
+                      )
+                  ).to.be.revertedWithCustomError(
+                      nftMarketwithUser2,
+                      "NftMarket__NotNftOwner"
+                  );
+              });
           });
           describe("cencelItem", async function () {
+              beforeEach(async function () {
+                  // 上架一个token0
+                  await nftMarketwithUser.listItem(
+                      chibiNftwithUser.address,
+                      0,
+                      ethers.utils.parseEther("1")
+                  );
+              });
               it("成功下架,释放event,mapping状态已更新", async function () {
                   const tx = await nftMarketwithUser.cencelItem(
                       chibiNftwithUser.address,
@@ -117,6 +139,213 @@ const { developmentChains } = require("../../helper-hardhat-config");
                       0
                   );
                   assert.equal(owner, ethers.constants.AddressZero);
+              });
+              it("下架失败，nft不在mapping中", async function () {
+                  await expect(
+                      nftMarketwithUser.cencelItem(chibiNftwithUser.address, 1)
+                  ).to.be.revertedWithCustomError(
+                      nftMarketwithUser,
+                      "NftMarket__NotListingItem"
+                  );
+              });
+          });
+
+          describe("buyItem", async function () {
+              beforeEach(async function () {
+                  // user1上架token0
+                  await nftMarketwithUser.listItem(
+                      chibiNftwithUser.address,
+                      0,
+                      ethers.utils.parseEther("1")
+                  );
+              });
+              it("购买失败，value小于价格", async function () {
+                  // user2购买
+                  const nftMarketwithUser2 = nftMarket.connect(signers[2]);
+                  await expect(
+                      nftMarketwithUser2.buyItem(chibiNft.address, 0, {
+                          value: ethers.utils.parseEther("0.9"),
+                      })
+                  ).to.be.revertedWithCustomError(
+                      nftMarketwithUser2,
+                      "NftMarket__NotEnoughValue"
+                  );
+              });
+              it("成功购买，释放购买成功事件，mapping移除nft信息，完成mapping账户余额记录", async function () {
+                  // user2购买
+                  const nftMarketwithUser2 = nftMarket.connect(signers[2]);
+                  const tx = await nftMarketwithUser2.buyItem(
+                      chibiNft.address,
+                      0,
+                      { value: ethers.utils.parseEther("1") }
+                  );
+                  const receipt = await tx.wait();
+
+                  //   事件释放
+                  assert.equal(receipt.events[1].event, "boughtEvent");
+                  const { owner } = await nftMarketwithUser.nftListings(
+                      chibiNftwithUser.address,
+                      0
+                  );
+
+                  //   mapping移除nft信息
+                  assert.equal(owner, ethers.constants.AddressZero);
+
+                  //   mapping user1余额记录
+                  const balance = await nftMarketwithUser.sellerBalances(user);
+                  assert.equal(
+                      balance.toString(),
+                      ethers.utils.parseEther("1").toString()
+                  );
+              });
+          });
+
+          describe("updatePrice", async function () {
+              beforeEach(async function () {
+                  // 上架一个token0
+                  await nftMarketwithUser.listItem(
+                      chibiNftwithUser.address,
+                      0,
+                      ethers.utils.parseEther("1")
+                  );
+              });
+              it("成功更新价格", async function () {
+                  // user1更新价格
+                  await nftMarketwithUser.updatePrice(
+                      chibiNftwithUser.address,
+                      0,
+                      ethers.utils.parseEther("2")
+                  );
+
+                  //   获取mapping中的价格
+                  const { price } = await nftMarketwithUser.nftListings(
+                      chibiNftwithUser.address,
+                      0
+                  );
+                  assert.equal(
+                      price.toString(),
+                      ethers.utils.parseEther("2").toString()
+                  );
+              });
+          });
+
+          describe("withdraw", async function () {
+              beforeEach(async function () {
+                  // 上架一个token0
+                  await nftMarketwithUser.listItem(
+                      chibiNftwithUser.address,
+                      0,
+                      ethers.utils.parseEther("1")
+                  );
+
+                  // user2购买
+                  const nftMarketwithUser2 = nftMarket.connect(signers[2]);
+                  await nftMarketwithUser2.buyItem(chibiNft.address, 0, {
+                      value: ethers.utils.parseEther("1"),
+                  });
+              });
+              it("提现失败，mapping账户余额为0", async function () {
+                  // user2提现
+                  const nftMarketwithUser2 = nftMarket.connect(signers[2]);
+                  await expect(
+                      nftMarketwithUser2.withdraw()
+                  ).to.be.revertedWithCustomError(
+                      nftMarketwithUser2,
+                      "NftMarket__NoBalance"
+                  );
+              });
+
+              it("成功提现，mapping账户余额清0，提取后=提取前+（余额/100*99）-gas", async function () {
+                  // 获取提现前的余额
+                  const balanceBefore = await ethers.provider.getBalance(user);
+                  //   获取提现前的mapping余额
+                  const balanceMappingBefore =
+                      await nftMarketwithUser.sellerBalances(user);
+
+                  // user1提现
+                  const tx = await nftMarketwithUser.withdraw();
+                  const gasPrice = tx.gasPrice;
+                  const receipt = await tx.wait();
+                  const ethCost = receipt.gasUsed.mul(gasPrice);
+
+                  //   断言提取后=提取前+（余额/100*99）-gas
+                  assert.equal(
+                      (await ethers.provider.getBalance(user)).toString(),
+                      balanceBefore
+                          .add(balanceMappingBefore.div(100).mul(99))
+                          .sub(ethCost)
+                          .toString()
+                  );
+              });
+          });
+          describe("contractOwnerWithdraw", async function () {
+              beforeEach(async function () {
+                  await signers[0].sendTransaction({
+                      to: nftMarket.address,
+                      value: ethers.utils.parseEther("1"),
+                  });
+              });
+              it("提现失败，非合约所有者", async function () {
+                  await expect(
+                      nftMarketwithUser.contractOwnerWithdraw()
+                  ).to.be.rejectedWith("Ownable: caller is not the owner");
+              });
+              it("提现成功,提取后=提取前+合约-gas", async function () {
+                  const contractBefore = await ethers.provider.getBalance(
+                      nftMarket.address
+                  );
+                  const balanceBefore = await signers[0].getBalance();
+                  const tx = await nftMarket.contractOwnerWithdraw();
+                  const gasPrice = tx.gasPrice;
+                  const receipt = await tx.wait();
+                  const ethCost = receipt.gasUsed.mul(gasPrice);
+                  assert.equal(
+                      (await signers[0].getBalance()).toString(),
+                      balanceBefore.add(contractBefore).sub(ethCost).toString()
+                  );
+              });
+          });
+
+          describe("clearNotApprovedNft", async function () {
+              beforeEach(async function () {
+                  // 授权nft
+                  await chibiNftwithUser.approve(nftMarket.address, 0);
+                  // 上架一个token0
+                  await nftMarketwithUser.listItem(
+                      chibiNftwithUser.address,
+                      0,
+                      ethers.utils.parseEther("1")
+                  );
+              });
+              it("清除已不被授权的nft", async function () {
+                  // 取消授权
+                  await chibiNftwithUser.approve(
+                      ethers.constants.AddressZero,
+                      0
+                  );
+
+                  //   调用clear方法，断言mapping中的nft已被清除
+                  await nftMarket.clearNotApprovedNft(
+                      chibiNftwithUser.address,
+                      0
+                  );
+                  assert.equal(
+                      (
+                          await nftMarketwithUser.nftListings(
+                              chibiNftwithUser.address,
+                              0
+                          )
+                      ).owner,
+                      ethers.constants.AddressZero
+                  );
+              });
+              it("nft已授权，revert", async function () {
+                  await expect(
+                      nftMarket.clearNotApprovedNft(chibiNftwithUser.address, 0)
+                  ).to.be.revertedWithCustomError(
+                      nftMarket,
+                      "NftMarket__IsApproved"
+                  );
               });
           });
       });

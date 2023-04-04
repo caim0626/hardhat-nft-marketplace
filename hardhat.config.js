@@ -14,6 +14,7 @@ const LOCAL2_RPC_URL = process.env.LOCAL2_RPC_URL;
 const LOCAL2_PRIVATE_KEY = process.env.LOCAL2_PRIVATE_KEY;
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL;
 const SEPOLIA_PRIVATE_KEY = process.env.MAINTEST_PRIVATE_KEY;
+const USER1_PRIVATE_KEY = process.env.USER1TEST_PRIVATE_KEY;
 
 module.exports = {
     // solidity: "0.8.8",
@@ -46,7 +47,7 @@ module.exports = {
         },
         Sepolia: {
             url: SEPOLIA_RPC_URL,
-            accounts: [SEPOLIA_PRIVATE_KEY],
+            accounts: [SEPOLIA_PRIVATE_KEY, USER1_PRIVATE_KEY],
             chainId: 11155111,
             blockConfirmations: 6,
         },

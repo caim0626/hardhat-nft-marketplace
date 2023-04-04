@@ -76,7 +76,10 @@ contract ChibiNft is ERC721URIStorage, VRFConsumerBaseV2, Ownable {
         emit NftRequested(requestId, msg.sender);
     }
 
-    function fulfillRandomWords(uint256 requestId, uint256[] memory randomwords) internal override {
+    function fulfillRandomWords(
+        uint256 requestId,
+        uint256[] memory randomwords
+    ) internal override {
         address minner = s_requestIdToSender[requestId];
         uint256 newItemId = s_tokenCounter;
         s_tokenCounter = s_tokenCounter + 1;
@@ -110,7 +113,9 @@ contract ChibiNft is ERC721URIStorage, VRFConsumerBaseV2, Ownable {
         return [10, MAXRANDOMVALUE];
     }
 
-    function getChibiTokenUris(uint256 index) public view returns (string memory) {
+    function getChibiTokenUris(
+        uint256 index
+    ) public view returns (string memory) {
         return s_chibiURIs[index];
     }
 
@@ -121,16 +126,6 @@ contract ChibiNft is ERC721URIStorage, VRFConsumerBaseV2, Ownable {
     function getMintFee() public view returns (uint256) {
         return mint_fee;
     }
-
-    // 这是个测试用的函数，当subId没有link代币时，更新用其他subId。
-    // 这种写法不合规，当合约内部变量更新时，需要一个event让外界可以检测。具体问题参考：https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
-    // function setSubId(uint64 _id) public onlyOwner {
-    //     s_subId = _id;
-    // }
-
-    // function getSubId() public view returns (uint64) {
-    //     return s_subId;
-    // }
 
     receive() external payable {
         RequestNft();
